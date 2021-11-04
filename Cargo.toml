@@ -1,0 +1,18 @@
+[package]
+name = "fast_fp"
+version = "0.1.0"
+authors = ["Renar Narubin <renar@standard.ai>"]
+edition = "2018"
+readme = "README.md"
+license = "MIT OR Apache-2.0"
+
+[[bench]]
+name = "operations"
+harness = false
+
+[dependencies]
+num-traits = { version = "0.2", optional = true }
+
+[dev-dependencies]
+criterion = "0.3"
+rand = "0.8"
