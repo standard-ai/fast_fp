@@ -1,7 +1,11 @@
 #![doc = include_str!("../README.md")]
 #![feature(core_intrinsics)] // intrinsics for the fast math
 #![feature(asm)] // asm used to emulate freeze
-use core::{cmp, fmt, intrinsics::fadd_fast, ops};
+use core::{
+    cmp, fmt,
+    intrinsics::{fadd_fast, fdiv_fast, fmul_fast, frem_fast, fsub_fast},
+    ops::{Add, Div, Mul, Neg, Rem, Sub},
+};
 
 mod poison;
 use poison::MaybePoison;
@@ -113,25 +117,129 @@ pub fn ff32(f: f32) -> FF32 {
     FF32::new(f)
 }
 
-impl ops::Add<FF32> for FF32 {
+impl Neg for FF32 {
     type Output = Self;
 
     #[inline(always)]
-    fn add(self, other: FF32) -> Self {
+    fn neg(self) -> Self::Output {
         // Safety:
         //
         // - dereferencing the pointers is safe because every bit pattern is valid in float
         // primitives
-        // - encountering poison operands is safe because LLVM's fast add documents not producing
-        // UB on any inputs; it may produce poison on inf/nan (or if the sum is inf/nan), but these
-        // are then wrapped in the MaybePoison to control propagation
-        ff32(unsafe {
-            fadd_fast(
-                *self.0.maybe_poison().as_ptr(),
-                *other.0.maybe_poison().as_ptr(),
-            )
-        })
+        // - encountering poison is safe because LLVM's negate instruction documents
+        // not producing UB on any inputs. The value is also immediately wrapped, so
+        // poison propagation is controlled
+        let val = unsafe { *self.0.maybe_poison().as_ptr() };
+        FF32::new(-val)
     }
+}
+
+impl Neg for &FF32 {
+    type Output = <FF32 as Neg>::Output;
+
+    #[inline]
+    fn neg(self) -> Self::Output {
+        -(*self)
+    }
+}
+
+impl fmt::Debug for FF32 {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Debug::fmt(&self.freeze_f32(), f)
+    }
+}
+
+impl fmt::Display for FF32 {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Display::fmt(&self.freeze_f32(), f)
+    }
+}
+
+macro_rules! impl_refs {
+    ($lhs:ident, $rhs:ident, $op_trait:ident, $op_fn:ident) => {
+        impl $op_trait<$rhs> for &$lhs {
+            type Output = <$lhs as $op_trait<$rhs>>::Output;
+
+            #[inline]
+            fn $op_fn(self, other: $rhs) -> Self::Output {
+                (*self).$op_fn(other)
+            }
+        }
+        impl $op_trait<&$rhs> for $lhs {
+            type Output = <$lhs as $op_trait<$rhs>>::Output;
+
+            #[inline]
+            fn $op_fn(self, other: &$rhs) -> Self::Output {
+                self.$op_fn(*other)
+            }
+        }
+        impl $op_trait<&$rhs> for &$lhs {
+            type Output = <$lhs as $op_trait<$rhs>>::Output;
+
+            #[inline]
+            fn $op_fn(self, other: &$rhs) -> Self::Output {
+                (*self).$op_fn(*other)
+            }
+        }
+    };
+}
+
+macro_rules! impl_fast_ops {
+    ($fast_ty:ident, $base_ty: ident: $($op_trait:ident, $op_fn:ident, $op_impl:ident,)*) => {
+        $(
+            impl $op_trait <$fast_ty> for $fast_ty {
+                type Output = $fast_ty;
+
+                #[inline(always)]
+                fn $op_fn(self, other: $fast_ty) -> Self::Output {
+                    // Safety:
+                    //
+                    // - dereferencing the pointers is safe because every bit pattern is valid in float
+                    // primitives
+                    // - encountering poison operands is safe because LLVM's fast ops documents not producing
+                    // UB on any inputs; it may produce poison on inf/nan (or if the sum is inf/nan), but these
+                    // are then wrapped in the MaybePoison to control propagation
+                    <$fast_ty>::new(unsafe {
+                        $op_impl(
+                            *self.0.maybe_poison().as_ptr(),
+                            *other.0.maybe_poison().as_ptr(),
+                        )
+                    })
+                }
+            }
+
+            impl $op_trait <$base_ty> for $fast_ty {
+                type Output = $fast_ty;
+
+                #[inline(always)]
+                fn $op_fn(self, other: $base_ty) -> Self::Output {
+                    self.$op_fn(<$fast_ty>::new(other))
+                }
+            }
+
+            impl $op_trait <$fast_ty> for $base_ty {
+                type Output = $fast_ty;
+
+                #[inline(always)]
+                fn $op_fn(self, other: $fast_ty) -> Self::Output {
+                    <$fast_ty>::new(self).$op_fn(other)
+                }
+            }
+
+            impl_refs! { $fast_ty, $fast_ty, $op_trait, $op_fn }
+            impl_refs! { $fast_ty, $base_ty, $op_trait, $op_fn }
+            impl_refs! { $base_ty, $fast_ty, $op_trait, $op_fn }
+        )*
+    };
+}
+
+impl_fast_ops! {
+    FF32, f32:
+    Add, add, fadd_fast,
+    Sub, sub, fsub_fast,
+    Mul, mul, fmul_fast,
+    Div, div, fdiv_fast,
+    Rem, rem, frem_fast,
 }
 
 // Branching on poison values is UB, so any operation that makes a bool is protected by freezing
@@ -146,6 +254,26 @@ impl PartialEq<FF32> for FF32 {
     #[inline]
     fn eq(&self, other: &FF32) -> bool {
         let this = self.freeze_f32();
+        let that = other.freeze_f32();
+
+        this == that
+    }
+}
+
+impl PartialEq<f32> for FF32 {
+    #[inline]
+    fn eq(&self, other: &f32) -> bool {
+        let this = self.freeze_f32();
+        let that = *other;
+
+        this == that
+    }
+}
+
+impl PartialEq<FF32> for f32 {
+    #[inline]
+    fn eq(&self, other: &FF32) -> bool {
+        let this = *self;
         let that = other.freeze_f32();
 
         this == that
