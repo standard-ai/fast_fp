@@ -4,7 +4,8 @@
 use core::{
     cmp, fmt,
     intrinsics::{fadd_fast, fdiv_fast, fmul_fast, frem_fast, fsub_fast},
-    ops::{Add, Div, Mul, Neg, Rem, Sub},
+    iter::{Product, Sum},
+    ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Rem, RemAssign, Sub, SubAssign},
 };
 
 mod poison;
@@ -98,7 +99,7 @@ pub fn ff64(f: f64) -> FF64 {
     FF64::new(f)
 }
 
-macro_rules! impl_refs {
+macro_rules! impl_binary_refs {
     ($lhs:ident, $rhs:ident, $op_trait:ident, $op_fn:ident) => {
         impl $op_trait<$rhs> for &$lhs {
             type Output = <$lhs as $op_trait<$rhs>>::Output;
@@ -169,11 +170,87 @@ macro_rules! impl_fast_ops {
                 }
             }
 
-            impl_refs! { $fast_ty, $fast_ty, $op_trait, $op_fn }
-            impl_refs! { $fast_ty, $base_ty, $op_trait, $op_fn }
-            impl_refs! { $base_ty, $fast_ty, $op_trait, $op_fn }
+            impl_binary_refs! { $fast_ty, $fast_ty, $op_trait, $op_fn }
+            impl_binary_refs! { $fast_ty, $base_ty, $op_trait, $op_fn }
+            impl_binary_refs! { $base_ty, $fast_ty, $op_trait, $op_fn }
         )*
     };
+}
+
+macro_rules! impl_assign_ops {
+    ($fast_ty:ident, $base_ty: ident: $($op_trait:ident, $op_fn:ident, $op:ident,)*) => {
+        $(
+            impl $op_trait <$fast_ty> for $fast_ty {
+                #[inline(always)]
+                fn $op_fn(&mut self, rhs: $fast_ty) {
+                    *self = <$fast_ty>::$op(*self, rhs)
+                }
+            }
+
+            impl $op_trait <&$fast_ty> for $fast_ty {
+                #[inline(always)]
+                fn $op_fn(&mut self, rhs: &$fast_ty) {
+                    *self = <$fast_ty>::$op(*self, rhs)
+                }
+            }
+
+            impl $op_trait <$base_ty> for $fast_ty {
+                #[inline(always)]
+                fn $op_fn(&mut self, rhs: $base_ty) {
+                    *self = <$fast_ty>::$op(*self, rhs)
+                }
+            }
+
+            impl $op_trait <&$base_ty> for $fast_ty {
+                #[inline(always)]
+                fn $op_fn(&mut self, rhs: &$base_ty) {
+                    *self = <$fast_ty>::$op(*self, rhs)
+                }
+            }
+        )*
+    }
+}
+
+macro_rules! impl_reduce_ops {
+    ($fast_ty:ident, $base_ty: ident: $($op_trait:ident, $op_fn:ident, $op:ident, $identity:expr,)*) => {
+        $(
+            impl $op_trait <$fast_ty> for $fast_ty {
+                #[inline]
+                fn $op_fn <I> (iter: I) -> Self
+                    where I: Iterator<Item = $fast_ty>
+                {
+                    iter.fold($identity, |acc, val| acc.$op(val))
+                }
+            }
+
+            impl<'a> $op_trait <&'a $fast_ty> for $fast_ty {
+                #[inline]
+                fn $op_fn <I> (iter: I) -> Self
+                    where I: Iterator<Item = &'a $fast_ty>
+                {
+                    iter.fold($identity, |acc, val| acc.$op(val))
+                }
+            }
+
+            impl $op_trait <$base_ty> for $fast_ty {
+                #[inline]
+                fn $op_fn <I> (iter: I) -> Self
+                    where I: Iterator<Item = $base_ty>
+                {
+                    iter.fold($identity, |acc, val| acc.$op(val))
+                }
+            }
+
+            impl<'a> $op_trait <&'a $base_ty> for $fast_ty {
+                #[inline]
+                fn $op_fn <I> (iter: I) -> Self
+                    where I: Iterator<Item = &'a $base_ty>
+                {
+                    iter.fold($identity, |acc, val| acc.$op(val))
+                }
+            }
+        )*
+    }
 }
 
 macro_rules! impl_fmt {
@@ -191,6 +268,9 @@ macro_rules! impl_fmt {
 macro_rules! impls {
     ($fast_ty:ident, $base_ty: ident) => {
         impl $fast_ty {
+            const ONE: $fast_ty = <$fast_ty>::new(1.0);
+            const ZERO: $fast_ty = <$fast_ty>::new(0.0);
+
             #[doc = "Create a new `"]
             #[doc= stringify!($fast_ty)]
             #[doc = "` instance from the given float value."]
@@ -233,6 +313,30 @@ macro_rules! impls {
         impl_fmt! {
             $fast_ty, $base_ty,
             fmt::Debug, fmt::Display, fmt::LowerExp, fmt::UpperExp,
+        }
+
+        impl_fast_ops! {
+            $fast_ty, $base_ty:
+            Add, add, fadd_fast,
+            Sub, sub, fsub_fast,
+            Mul, mul, fmul_fast,
+            Div, div, fdiv_fast,
+            Rem, rem, frem_fast,
+        }
+
+        impl_assign_ops! {
+            $fast_ty, $base_ty:
+            AddAssign, add_assign, add,
+            SubAssign, sub_assign, sub,
+            MulAssign, mul_assign, mul,
+            DivAssign, div_assign, div,
+            RemAssign, rem_assign, rem,
+        }
+
+        impl_reduce_ops! {
+            $fast_ty, $base_ty:
+            Sum, sum, add, Self::ZERO,
+            Product, product, mul, Self::ONE,
         }
 
         impl Neg for $fast_ty {
@@ -363,6 +467,7 @@ macro_rules! impls {
         }
 
         impl From<$fast_ty> for $base_ty {
+            #[inline(always)]
             fn from(from: $fast_ty) -> Self {
                 // base primitives are no longer in our API control, so we must stop poison
                 // propagation by freezing
@@ -371,18 +476,10 @@ macro_rules! impls {
         }
 
         impl From<$base_ty> for $fast_ty {
+            #[inline(always)]
             fn from(from: $base_ty) -> Self {
                 <$fast_ty>::new(from)
             }
-        }
-
-        impl_fast_ops! {
-            $fast_ty, $base_ty:
-            Add, add, fadd_fast,
-            Sub, sub, fsub_fast,
-            Mul, mul, fmul_fast,
-            Div, div, fdiv_fast,
-            Rem, rem, frem_fast,
         }
     };
 }
