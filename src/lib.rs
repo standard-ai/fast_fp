@@ -62,48 +62,11 @@ impl std::error::Error for InvalidValueError {}
 // https://github.com/rust-lang/unsafe-code-guidelines/issues/71
 // notes on the validity of primitive bit patterns
 
-/// A wrapper over `f32` which enables fast-math optimizations.
+/// A wrapper over `f32` which enables some fast-math optimizations.
 // TODO how best to document unspecified values, including witnessing possibly varying values
 #[derive(Clone, Copy)]
 #[repr(transparent)]
 pub struct FF32(MaybePoison<f32>);
-
-impl FF32 {
-    /// Create a new `FF32` instance from the given float value.
-    ///
-    /// The given value **MUST NOT** be infinite or NaN, and any operations involving this value must
-    /// not produce infinite or NaN results. The output of any such operation is unspecified.
-    #[inline(always)]
-    pub const fn new(f: f32) -> Self {
-        FF32(MaybePoison::new(f))
-    }
-
-    /// Create a new `FF32` instance from the given float value, returning an error if the value is
-    /// infinite or NaN.
-    ///
-    /// Note that this check is **not sufficient** to avoid all unspecified outputs, because an
-    /// operation could otherwise produce an invalid value with valid inputs (for example
-    /// `ff32(1.0) / ff32(0.0)` is unspecified). Nevertheless, this check can be useful for
-    /// limited best-effort validation.
-    #[inline(always)]
-    pub fn new_checked(f: f32) -> Result<Self, InvalidValueError> {
-        // finite also checks for NaN
-        if f.is_finite() {
-            Ok(FF32::new(f))
-        } else {
-            Err(InvalidValueError { _priv: () })
-        }
-    }
-
-    #[inline(always)]
-    fn freeze_f32(self) -> f32 {
-        let inner = self.0.freeze();
-
-        // Safety:
-        // every bit pattern is valid in float
-        unsafe { inner.assume_init() }
-    }
-}
 
 /// Create a new `FF32` instance from the given float value.
 ///
@@ -117,42 +80,22 @@ pub fn ff32(f: f32) -> FF32 {
     FF32::new(f)
 }
 
-impl Neg for FF32 {
-    type Output = Self;
+/// A wrapper over `f64` which enables some fast-math optimizations.
+// TODO how best to document unspecified values, including witnessing possibly varying values
+#[derive(Clone, Copy)]
+#[repr(transparent)]
+pub struct FF64(MaybePoison<f64>);
 
-    #[inline(always)]
-    fn neg(self) -> Self::Output {
-        // Safety:
-        //
-        // - dereferencing the pointers is safe because every bit pattern is valid in float
-        // primitives
-        // - encountering poison is safe because LLVM's negate instruction documents
-        // not producing UB on any inputs. The value is also immediately wrapped, so
-        // poison propagation is controlled
-        let val = unsafe { *self.0.maybe_poison().as_ptr() };
-        FF32::new(-val)
-    }
-}
-
-impl Neg for &FF32 {
-    type Output = <FF32 as Neg>::Output;
-
-    #[inline]
-    fn neg(self) -> Self::Output {
-        -(*self)
-    }
-}
-
-impl fmt::Debug for FF32 {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        fmt::Debug::fmt(&self.freeze_f32(), f)
-    }
-}
-
-impl fmt::Display for FF32 {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        fmt::Display::fmt(&self.freeze_f32(), f)
-    }
+/// Create a new `FF64` instance from the given float value.
+///
+/// This is syntax sugar for constructing the `FF64` type, and equivalent to `FF64::new(f)`
+///
+/// The given value **MUST NOT** be infinite or NaN, and any operations involving this value must
+/// not produce infinite or NaN results. The output of any such operation is unspecified.
+#[inline(always)]
+pub fn ff64(f: f64) -> FF64 {
+    // TODO maybe a feature flag to make this checked -> panic?
+    FF64::new(f)
 }
 
 macro_rules! impl_refs {
@@ -233,120 +176,218 @@ macro_rules! impl_fast_ops {
     };
 }
 
-impl_fast_ops! {
-    FF32, f32:
-    Add, add, fadd_fast,
-    Sub, sub, fsub_fast,
-    Mul, mul, fmul_fast,
-    Div, div, fdiv_fast,
-    Rem, rem, frem_fast,
-}
-
-// Branching on poison values is UB, so any operation that makes a bool is protected by freezing
-// the operands. This includes [Partial]Eq and [Partial]Ord.
-//
-// Note however that only value copies are frozen; the original values may still be poison, and
-// could even yield different concrete values on a subsequent freeze. This means that potentially
-// the values are not Eq/Ord consistent. Logical consistency is left as a responsibility of
-// the user, to maintain non inf/nan values, while the lib only ensures safety.
-
-impl PartialEq<FF32> for FF32 {
-    #[inline]
-    fn eq(&self, other: &FF32) -> bool {
-        let this = self.freeze_f32();
-        let that = other.freeze_f32();
-
-        this == that
+macro_rules! impl_fmt {
+    ($fast_ty:ident, $base_ty:ident, $($fmt_trait:path,)*) => {
+        $(
+            impl $fmt_trait for $fast_ty {
+                fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                    <$base_ty as $fmt_trait>::fmt(&self.freeze_raw(), f)
+                }
+            }
+        )*
     }
 }
 
-impl PartialEq<f32> for FF32 {
-    #[inline]
-    fn eq(&self, other: &f32) -> bool {
-        let this = self.freeze_f32();
-        let that = *other;
+macro_rules! impls {
+    ($fast_ty:ident, $base_ty: ident) => {
+        impl $fast_ty {
+            #[doc = "Create a new `"]
+            #[doc= stringify!($fast_ty)]
+            #[doc = "` instance from the given float value."]
+            ///
+            /// The given value **MUST NOT** be infinite or NaN, and any operations involving this value must
+            /// not produce infinite or NaN results. The output of any such operation is unspecified.
+            #[inline(always)]
+            pub const fn new(f: $base_ty) -> Self {
+                $fast_ty(MaybePoison::new(f))
+            }
 
-        this == that
-    }
-}
+            #[doc = "Create a new `"]
+            #[doc= stringify!($fast_ty)]
+            #[doc = "` instance from the given float value, returning an error if the value is infinite or NaN."]
+            ///
+            /// Note that this check is **not sufficient** to avoid all unspecified outputs, because an
+            /// operation could otherwise produce an invalid value with valid inputs (for example
+            /// `ff32(1.0) / ff32(0.0)` is unspecified). Nevertheless, this check can be useful for
+            /// limited best-effort validation.
+            #[inline(always)]
+            pub fn new_checked(f: $base_ty) -> Result<Self, InvalidValueError> {
+                // finite also checks for NaN
+                if f.is_finite() {
+                    Ok($fast_ty::new(f))
+                } else {
+                    Err(InvalidValueError { _priv: () })
+                }
+            }
 
-impl PartialEq<FF32> for f32 {
-    #[inline]
-    fn eq(&self, other: &FF32) -> bool {
-        let this = *self;
-        let that = other.freeze_f32();
+            #[inline(always)]
+            fn freeze_raw(self) -> $base_ty {
+                let inner = self.0.freeze();
 
-        this == that
-    }
-}
-
-impl Eq for FF32 {}
-
-impl PartialOrd<FF32> for FF32 {
-    #[inline(always)]
-    fn partial_cmp(&self, other: &FF32) -> Option<cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-
-    #[inline(always)]
-    fn lt(&self, other: &FF32) -> bool {
-        self.freeze_f32() < other.freeze_f32()
-    }
-
-    #[inline(always)]
-    fn le(&self, other: &FF32) -> bool {
-        self.freeze_f32() <= other.freeze_f32()
-    }
-
-    #[inline(always)]
-    fn gt(&self, other: &FF32) -> bool {
-        self.freeze_f32() > other.freeze_f32()
-    }
-
-    #[inline(always)]
-    fn ge(&self, other: &FF32) -> bool {
-        self.freeze_f32() >= other.freeze_f32()
-    }
-}
-
-impl Ord for FF32 {
-    #[inline(always)]
-    fn cmp(&self, other: &FF32) -> cmp::Ordering {
-        let this = self.freeze_f32();
-        let that = other.freeze_f32();
-
-        // Note NaNs are not supported (and would break everything else anyway) so we ignore them
-        // and implement full Ord
-        if this < that {
-            cmp::Ordering::Less
-        } else if this > that {
-            cmp::Ordering::Greater
-        } else {
-            cmp::Ordering::Equal
+                // Safety:
+                // every bit pattern is valid in float
+                unsafe { inner.assume_init() }
+            }
         }
-    }
 
-    #[inline]
-    fn clamp(self, min: FF32, max: FF32) -> FF32 {
-        ff32(f32::clamp(
-            self.freeze_f32(),
-            min.freeze_f32(),
-            max.freeze_f32(),
-        ))
-    }
+        impl_fmt! {
+            $fast_ty, $base_ty,
+            fmt::Debug, fmt::Display, fmt::LowerExp, fmt::UpperExp,
+        }
+
+        impl Neg for $fast_ty {
+            type Output = Self;
+
+            #[inline(always)]
+            fn neg(self) -> Self::Output {
+                // Safety:
+                //
+                // - dereferencing the pointers is safe because every bit pattern is valid in float
+                // primitives
+                // - encountering poison is safe because LLVM's negate instruction documents
+                // not producing UB on any inputs. The value is also immediately wrapped, so
+                // poison propagation is controlled
+                let val = unsafe { *self.0.maybe_poison().as_ptr() };
+                $fast_ty::new(-val)
+            }
+        }
+
+        impl Neg for &$fast_ty {
+            type Output = <$fast_ty as Neg>::Output;
+
+            #[inline]
+            fn neg(self) -> Self::Output {
+                -(*self)
+            }
+        }
+
+        // Branching on poison values is UB, so any operation that makes a bool is protected by
+        // freezing the operands. This includes [Partial]Eq and [Partial]Ord. Unfortunately
+        // freezing has a nontrivial impact on performance, so non-bool methods should be preferred
+        // when applicable, such as min/max/clamp
+        //
+        // Note however that only value copies are frozen; the original values may still be poison, and
+        // could even yield different concrete values on a subsequent freeze. This means that potentially
+        // the values are not Eq/Ord consistent. Logical consistency is left as a responsibility of
+        // the user, to maintain non inf/nan values, while the lib only ensures safety.
+
+        impl PartialEq<$fast_ty> for $fast_ty {
+            #[inline]
+            fn eq(&self, other: &$fast_ty) -> bool {
+                let this = self.freeze_raw();
+                let that = other.freeze_raw();
+
+                this == that
+            }
+        }
+
+        impl PartialEq<$base_ty> for $fast_ty {
+            #[inline]
+            fn eq(&self, other: &$base_ty) -> bool {
+                let this = self.freeze_raw();
+                let that = *other;
+
+                this == that
+            }
+        }
+
+        impl PartialEq<$fast_ty> for $base_ty {
+            #[inline]
+            fn eq(&self, other: &$fast_ty) -> bool {
+                let this = *self;
+                let that = other.freeze_raw();
+
+                this == that
+            }
+        }
+
+        impl Eq for $fast_ty {}
+
+        impl PartialOrd<$fast_ty> for $fast_ty {
+            #[inline(always)]
+            fn partial_cmp(&self, other: &$fast_ty) -> Option<cmp::Ordering> {
+                Some(self.cmp(other))
+            }
+
+            // TODO specialize a MaybePoison<bool> with `x & 0b1`?
+            // then comparisons can freeze only once on output instead of twice on input
+
+            #[inline(always)]
+            fn lt(&self, other: &$fast_ty) -> bool {
+                self.freeze_raw() < other.freeze_raw()
+            }
+
+            #[inline(always)]
+            fn le(&self, other: &$fast_ty) -> bool {
+                self.freeze_raw() <= other.freeze_raw()
+            }
+
+            #[inline(always)]
+            fn gt(&self, other: &$fast_ty) -> bool {
+                self.freeze_raw() > other.freeze_raw()
+            }
+
+            #[inline(always)]
+            fn ge(&self, other: &$fast_ty) -> bool {
+                self.freeze_raw() >= other.freeze_raw()
+            }
+        }
+
+        impl Ord for $fast_ty {
+            #[inline(always)]
+            fn cmp(&self, other: &$fast_ty) -> cmp::Ordering {
+                let this = self.freeze_raw();
+                let that = other.freeze_raw();
+
+                // Note NaNs are not supported (and would break everything else anyway) so we ignore them
+                // and implement full Ord
+                if this < that {
+                    cmp::Ordering::Less
+                } else if this > that {
+                    cmp::Ordering::Greater
+                } else {
+                    cmp::Ordering::Equal
+                }
+            }
+
+            #[inline]
+            fn clamp(self, min: $fast_ty, max: $fast_ty) -> $fast_ty {
+                // TODO implement in terms of min/max,
+                // TODO also implement min/max (intrinsics? we don't want branches)
+                <$fast_ty>::new($base_ty::clamp(
+                    self.freeze_raw(),
+                    min.freeze_raw(),
+                    max.freeze_raw(),
+                ))
+            }
+        }
+
+        impl From<$fast_ty> for $base_ty {
+            fn from(from: $fast_ty) -> Self {
+                // base primitives are no longer in our API control, so we must stop poison
+                // propagation by freezing
+                from.freeze_raw()
+            }
+        }
+
+        impl From<$base_ty> for $fast_ty {
+            fn from(from: $base_ty) -> Self {
+                <$fast_ty>::new(from)
+            }
+        }
+
+        impl_fast_ops! {
+            $fast_ty, $base_ty:
+            Add, add, fadd_fast,
+            Sub, sub, fsub_fast,
+            Mul, mul, fmul_fast,
+            Div, div, fdiv_fast,
+            Rem, rem, frem_fast,
+        }
+    };
 }
 
-impl From<FF32> for f32 {
-    fn from(from: FF32) -> Self {
-        // f32 is no longer in our API control, so we must stop poison propagation by freezing
-        from.freeze_f32()
-    }
-}
+impls! { FF32, f32 }
+impls! { FF64, f64 }
 
-impl From<f32> for FF32 {
-    fn from(from: f32) -> Self {
-        ff32(from)
-    }
-}
-
-// TODO FF64, macro everything, more ops, libm?
+// TODO num_traits, libm?
