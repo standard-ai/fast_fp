@@ -10,8 +10,22 @@ license = "MIT OR Apache-2.0"
 name = "operations"
 harness = false
 
+[features]
+default = ["num-traits"]
+
+nalgebra-v021 = ["num-traits", "nalgebra_v021", "simba_v01", "approx_v03"]
+nalgebra-v029 = ["num-traits", "nalgebra_v029", "simba_v06", "approx_v05"]
+
 [dependencies]
 num-traits = { version = "0.2", optional = true }
+
+approx_v03 = { package = "approx", version = "0.3", optional = true }
+nalgebra_v021 = { package = "nalgebra", version = "0.21", optional = true }
+simba_v01 = { package = "simba", version = "0.1", optional = true }
+
+approx_v05 = { package = "approx", version = "0.5", optional = true }
+nalgebra_v029 = { package = "nalgebra", version = "0.29", optional = true }
+simba_v06 = { package = "simba", version = "0.6", optional = true }
 
 [dev-dependencies]
 criterion = { version = "0.3", features = ["html_reports"] }
