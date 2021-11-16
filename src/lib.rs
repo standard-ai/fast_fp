@@ -2,6 +2,8 @@
 #![feature(core_intrinsics)] // intrinsics for the fast math
 #![feature(asm)] // asm used to emulate freeze
 #![feature(doc_cfg)]
+#![feature(link_llvm_intrinsics)]
+
 use core::{
     cmp, fmt,
     intrinsics::{fadd_fast, fdiv_fast, fmul_fast, frem_fast, fsub_fast},
@@ -40,6 +42,7 @@ macro_rules! forward_freeze_self {
     };
 }
 
+mod math;
 mod nalgebra;
 mod num_traits;
 
@@ -347,7 +350,6 @@ macro_rules! impls {
             // TODO migrate these to native implementations to freeze less and fast-math more
             forward_freeze_self! {
                 $fast_ty, $base_ty
-                pub fn abs(self) -> Self;
                 pub fn acos(self) -> Self;
                 pub fn acosh(self) -> Self;
                 pub fn asin(self) -> Self;
@@ -358,7 +360,6 @@ macro_rules! impls {
                 pub fn cbrt(self) -> Self;
                 pub fn ceil(self) -> Self;
                 pub fn clamp(self, min: Self, max: Self) -> Self;
-                pub fn copysign(self, sign: Self) -> Self;
                 pub fn cos(self) -> Self;
                 pub fn cosh(self) -> Self;
                 pub fn div_euclid(self, rhs: Self) -> Self;
@@ -367,20 +368,17 @@ macro_rules! impls {
                 pub fn exp_m1(self) -> Self;
                 pub fn floor(self) -> Self;
                 pub fn fract(self) -> Self;
-                pub fn hypot(self, other: Self) -> Self;
                 pub fn ln(self) -> Self;
                 pub fn ln_1p(self) -> Self;
                 pub fn log(self, base: Self) -> Self;
                 pub fn log10(self) -> Self;
                 pub fn log2(self) -> Self;
-                pub fn max(self, other: Self) -> Self;
-                pub fn min(self, other: Self) -> Self;
+                //pub fn max(self, other: Self) -> Self;
+                //pub fn min(self, other: Self) -> Self;
                 pub fn mul_add(self, a: Self, b: Self) -> Self;
                 pub fn powf(self, n: Self) -> Self;
-                pub fn recip(self) -> Self;
                 pub fn rem_euclid(self, rhs: Self) -> Self;
                 pub fn round(self) -> Self;
-                pub fn signum(self) -> Self;
                 pub fn sin(self) -> Self;
                 pub fn sinh(self) -> Self;
                 pub fn sqrt(self) -> Self;
