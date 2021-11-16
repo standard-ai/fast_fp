@@ -176,15 +176,13 @@ macro_rules! impl_fast_ops {
                 fn $op_fn(self, other: $fast_ty) -> Self::Output {
                     // Safety:
                     //
-                    // - dereferencing the pointers is safe because every bit pattern is valid in float
-                    // primitives
                     // - encountering poison operands is safe because LLVM's fast ops documents not producing
                     // UB on any inputs; it may produce poison on inf/nan (or if the sum is inf/nan), but these
                     // are then wrapped in the MaybePoison to control propagation
                     <$fast_ty>::new(unsafe {
                         $op_impl(
-                            *self.0.maybe_poison().as_ptr(),
-                            *other.0.maybe_poison().as_ptr(),
+                            self.0.maybe_poison(),
+                            other.0.maybe_poison(),
                         )
                     })
                 }
@@ -340,11 +338,7 @@ macro_rules! impls {
 
             #[inline(always)]
             fn freeze_raw(self) -> $base_ty {
-                let inner = self.0.freeze();
-
-                // Safety:
-                // every bit pattern is valid in float
-                unsafe { inner.assume_init() }
+                self.0.freeze()
             }
 
             // TODO migrate these to native implementations to freeze less and fast-math more
@@ -479,12 +473,10 @@ macro_rules! impls {
             fn neg(self) -> Self::Output {
                 // Safety:
                 //
-                // - dereferencing the pointers is safe because every bit pattern is valid in float
-                // primitives
                 // - encountering poison is safe because LLVM's negate instruction documents
                 // not producing UB on any inputs. The value is also immediately wrapped, so
                 // poison propagation is controlled
-                let val = unsafe { *self.0.maybe_poison().as_ptr() };
+                let val = unsafe { self.0.maybe_poison() };
                 $fast_ty::new(-val)
             }
         }

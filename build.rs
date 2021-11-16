@@ -6,10 +6,23 @@ fn main() {
         builder.compiler("clang");
     }
 
+    builder.flag("-O3").flag("-flto=thin");
+
+    build_ll(builder.clone());
+    build_c(builder);
+}
+
+fn build_ll(mut builder: cc::Build) {
+    // the ll files are written bare, let the compiler override module annotations and don't warn
+    // about it
+    builder.flag("-Wno-override-module");
+
+    builder.file("src/poison/freeze.ll").compile("freeze");
+}
+
+fn build_c(mut builder: cc::Build) {
     builder
         .file("src/math/math.c")
-        .flag("-O3")
-        .flag("-flto=thin")
         .flag("-ffinite-math-only")
         .flag("-fassociative-math")
         .flag("-freciprocal-math")

@@ -20,7 +20,7 @@ macro_rules! impl_generic_math {
                 //
                 // - `to_bits` should be valid for any input bits
                 // - poison propagation is controlled with MaybePoison
-                MaybePoison::new(unsafe { <$base_ty>::to_bits(*self.0.maybe_poison().as_ptr()) })
+                MaybePoison::new(unsafe { <$base_ty>::to_bits(self.0.maybe_poison()) })
             }
 
             #[inline]
@@ -30,7 +30,7 @@ macro_rules! impl_generic_math {
                 // - `from_bits` should be valid for any input bits
                 // - poison propagation is controlled with MaybePoison
                 Self(MaybePoison::new(unsafe {
-                    <$base_ty>::from_bits(*bits.maybe_poison().as_ptr())
+                    <$base_ty>::from_bits(bits.maybe_poison())
                 }))
             }
 
@@ -38,7 +38,7 @@ macro_rules! impl_generic_math {
             pub fn abs(self) -> Self {
                 let bits = self.to_bits();
                 <$fast_ty>::from_bits(MaybePoison::new(unsafe {
-                    *bits.maybe_poison().as_ptr() & Self::UNSIGNED_MASK
+                    bits.maybe_poison() & Self::UNSIGNED_MASK
                 }))
             }
 
@@ -52,8 +52,8 @@ macro_rules! impl_generic_math {
                 // - & of poison is safe because & does not produce UB for any input values
                 // - poison propagation is handled by wrapping in maybe poison
                 <$fast_ty>::from_bits(MaybePoison::new(unsafe {
-                    (*this.maybe_poison().as_ptr() & Self::UNSIGNED_MASK)
-                        | (*that.maybe_poison().as_ptr() & Self::SIGN_BIT)
+                    (this.maybe_poison() & Self::UNSIGNED_MASK)
+                        | (that.maybe_poison() & Self::SIGN_BIT)
                 }))
             }
 
