@@ -2,7 +2,7 @@
 name = "fast_fp"
 version = "0.1.0"
 authors = ["Renar Narubin <renar@standard.ai>"]
-edition = "2018"
+edition = "2021"
 readme = "README.md"
 license = "MIT OR Apache-2.0"
 
@@ -18,8 +18,30 @@ name = "math"
 harness = false
 
 [features]
-default = ["num-traits"]
+default = [
+  "num-traits",
+  "finite-math-only",
+  "associative-math",
+  "reciprocal-math",
+  "no-signed-zeros",
+  "no-trapping-math",
+  "fp-contract-fast",
+  "approx-func",
+]
 
+# default fast-math features
+finite-math-only = []
+associative-math = []
+reciprocal-math = []
+no-signed-zeros = []
+no-trapping-math = []
+fp-contract-fast = []
+approx-func = []
+
+# non-default fast-math-like features
+denormal-fp-math-preserve-sign = []
+
+# optional trait implementations
 nalgebra-v021 = ["num-traits", "nalgebra_v021", "simba_v01", "approx_v03"]
 nalgebra-v029 = ["num-traits", "nalgebra_v029", "simba_v06", "approx_v05"]
 
@@ -48,5 +70,5 @@ rand = "0.8"
 opt-level = 3
 
 [profile.release]
-lto = "fat"
-codegen-units = 1
+lto="thin"
+codegen-units=1

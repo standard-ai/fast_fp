@@ -1,4 +1,5 @@
 use crate::{poison::MaybePoison, FF32, FF64};
+use core::ops::{Add, Div, Mul, Rem, Sub};
 use paste::paste;
 
 impl FF32 {
@@ -75,12 +76,95 @@ macro_rules! impl_generic_math {
     };
 }
 
+macro_rules! impl_binary_refs {
+    ($lhs:ident, $rhs:ident, $op_trait:ident, $op_fn:ident) => {
+        impl $op_trait<$rhs> for &$lhs {
+            type Output = <$lhs as $op_trait<$rhs>>::Output;
+
+            #[inline]
+            fn $op_fn(self, other: $rhs) -> Self::Output {
+                (*self).$op_fn(other)
+            }
+        }
+        impl $op_trait<&$rhs> for $lhs {
+            type Output = <$lhs as $op_trait<$rhs>>::Output;
+
+            #[inline]
+            fn $op_fn(self, other: &$rhs) -> Self::Output {
+                self.$op_fn(*other)
+            }
+        }
+        impl $op_trait<&$rhs> for &$lhs {
+            type Output = <$lhs as $op_trait<$rhs>>::Output;
+
+            #[inline]
+            fn $op_fn(self, other: &$rhs) -> Self::Output {
+                (*self).$op_fn(*other)
+            }
+        }
+    };
+}
+
+macro_rules! impl_fast_ops {
+    ($fast_ty:ident, $base_ty: ident: $($op_trait:ident, $op_fn:ident, $op_impl:ident,)*) => {
+        $(
+            impl $op_trait <$fast_ty> for $fast_ty {
+                type Output = $fast_ty;
+
+                #[inline(always)]
+                fn $op_fn(self, other: $fast_ty) -> Self::Output {
+                    unsafe { $op_impl(self, other) }
+                }
+            }
+
+            impl $op_trait <$base_ty> for $fast_ty {
+                type Output = $fast_ty;
+
+                #[inline(always)]
+                fn $op_fn(self, other: $base_ty) -> Self::Output {
+                    self.$op_fn(<$fast_ty>::new(other))
+                }
+            }
+
+            impl $op_trait <$fast_ty> for $base_ty {
+                type Output = $fast_ty;
+
+                #[inline(always)]
+                fn $op_fn(self, other: $fast_ty) -> Self::Output {
+                    <$fast_ty>::new(self).$op_fn(other)
+                }
+            }
+
+            impl_binary_refs! { $fast_ty, $fast_ty, $op_trait, $op_fn }
+            impl_binary_refs! { $fast_ty, $base_ty, $op_trait, $op_fn }
+            impl_binary_refs! { $base_ty, $fast_ty, $op_trait, $op_fn }
+        )*
+    };
+}
+
 macro_rules! impl_extern_math {
     ($fast_ty:ident, $base_ty:ident) => {
         paste! {
             extern "C" {
+                fn [<add_ $base_ty>](a: $fast_ty, b: $fast_ty) -> $fast_ty;
+                fn [<sub_ $base_ty>](a: $fast_ty, b: $fast_ty) -> $fast_ty;
+                fn [<mul_ $base_ty>](a: $fast_ty, b: $fast_ty) -> $fast_ty;
+                fn [<div_ $base_ty>](a: $fast_ty, b: $fast_ty) -> $fast_ty;
+                fn [<rem_ $base_ty>](a: $fast_ty, b: $fast_ty) -> $fast_ty;
+
                 fn [<min_ $base_ty>](a: $fast_ty, b: $fast_ty) -> $fast_ty;
                 fn [<max_ $base_ty>](a: $fast_ty, b: $fast_ty) -> $fast_ty;
+
+                fn [<sqrt_ $base_ty>](a: $fast_ty) -> $fast_ty;
+            }
+
+            impl_fast_ops! {
+                $fast_ty, $base_ty:
+                Add, add, [<add_ $base_ty>],
+                Sub, sub, [<sub_ $base_ty>],
+                Mul, mul, [<mul_ $base_ty>],
+                Div, div, [<div_ $base_ty>],
+                Rem, rem, [<rem_ $base_ty>],
             }
 
             impl $fast_ty {
@@ -92,6 +176,11 @@ macro_rules! impl_extern_math {
                 #[inline]
                 pub fn min(self, other: Self) -> Self {
                     unsafe { [<min_ $base_ty>](self, other) }
+                }
+
+                #[inline]
+                pub fn sqrt(self) -> Self {
+                    unsafe { [<sqrt_ $base_ty>](self) }
                 }
             }
         }

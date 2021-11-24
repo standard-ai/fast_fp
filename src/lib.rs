@@ -1,12 +1,8 @@
 #![doc = include_str!("../README.md")]
-#![feature(core_intrinsics)] // intrinsics for the fast math
-#![feature(asm)] // asm used to emulate freeze
 #![feature(doc_cfg)]
-#![feature(link_llvm_intrinsics)]
 
 use core::{
     cmp, fmt,
-    intrinsics::{fadd_fast, fdiv_fast, fmul_fast, frem_fast, fsub_fast},
     iter::{Product, Sum},
     num::FpCategory,
     ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Rem, RemAssign, Sub, SubAssign},
@@ -135,82 +131,6 @@ pub struct FF64(MaybePoison<f64>);
 pub fn ff64(f: f64) -> FF64 {
     // TODO maybe a feature flag to make this checked -> panic?
     FF64::new(f)
-}
-
-macro_rules! impl_binary_refs {
-    ($lhs:ident, $rhs:ident, $op_trait:ident, $op_fn:ident) => {
-        impl $op_trait<$rhs> for &$lhs {
-            type Output = <$lhs as $op_trait<$rhs>>::Output;
-
-            #[inline]
-            fn $op_fn(self, other: $rhs) -> Self::Output {
-                (*self).$op_fn(other)
-            }
-        }
-        impl $op_trait<&$rhs> for $lhs {
-            type Output = <$lhs as $op_trait<$rhs>>::Output;
-
-            #[inline]
-            fn $op_fn(self, other: &$rhs) -> Self::Output {
-                self.$op_fn(*other)
-            }
-        }
-        impl $op_trait<&$rhs> for &$lhs {
-            type Output = <$lhs as $op_trait<$rhs>>::Output;
-
-            #[inline]
-            fn $op_fn(self, other: &$rhs) -> Self::Output {
-                (*self).$op_fn(*other)
-            }
-        }
-    };
-}
-
-macro_rules! impl_fast_ops {
-    ($fast_ty:ident, $base_ty: ident: $($op_trait:ident, $op_fn:ident, $op_impl:ident,)*) => {
-        $(
-            impl $op_trait <$fast_ty> for $fast_ty {
-                type Output = $fast_ty;
-
-                #[inline(always)]
-                fn $op_fn(self, other: $fast_ty) -> Self::Output {
-                    // Safety:
-                    //
-                    // - encountering poison operands is safe because LLVM's fast ops documents not producing
-                    // UB on any inputs; it may produce poison on inf/nan (or if the sum is inf/nan), but these
-                    // are then wrapped in the MaybePoison to control propagation
-                    <$fast_ty>::new(unsafe {
-                        $op_impl(
-                            self.0.maybe_poison(),
-                            other.0.maybe_poison(),
-                        )
-                    })
-                }
-            }
-
-            impl $op_trait <$base_ty> for $fast_ty {
-                type Output = $fast_ty;
-
-                #[inline(always)]
-                fn $op_fn(self, other: $base_ty) -> Self::Output {
-                    self.$op_fn(<$fast_ty>::new(other))
-                }
-            }
-
-            impl $op_trait <$fast_ty> for $base_ty {
-                type Output = $fast_ty;
-
-                #[inline(always)]
-                fn $op_fn(self, other: $fast_ty) -> Self::Output {
-                    <$fast_ty>::new(self).$op_fn(other)
-                }
-            }
-
-            impl_binary_refs! { $fast_ty, $fast_ty, $op_trait, $op_fn }
-            impl_binary_refs! { $fast_ty, $base_ty, $op_trait, $op_fn }
-            impl_binary_refs! { $base_ty, $fast_ty, $op_trait, $op_fn }
-        )*
-    };
 }
 
 macro_rules! impl_assign_ops {
@@ -375,7 +295,7 @@ macro_rules! impls {
                 pub fn round(self) -> Self;
                 pub fn sin(self) -> Self;
                 pub fn sinh(self) -> Self;
-                pub fn sqrt(self) -> Self;
+                //pub fn sqrt(self) -> Self;
                 pub fn tan(self) -> Self;
                 pub fn tanh(self) -> Self;
                 pub fn to_degrees(self) -> Self;
@@ -440,15 +360,6 @@ macro_rules! impls {
         impl_fmt! {
             $fast_ty, $base_ty,
             fmt::Debug, fmt::Display, fmt::LowerExp, fmt::UpperExp,
-        }
-
-        impl_fast_ops! {
-            $fast_ty, $base_ty:
-            Add, add, fadd_fast,
-            Sub, sub, fsub_fast,
-            Mul, mul, fmul_fast,
-            Div, div, fdiv_fast,
-            Rem, rem, frem_fast,
         }
 
         impl_assign_ops! {

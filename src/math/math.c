@@ -2,7 +2,6 @@
 #include <math.h>
 
 #define IMPL_OPERATIONS(C_TYPE, RUST_TYPE)       \
-  /* TODO figure out why these don't inline */   \
   __attribute__((always_inline))                 \
   C_TYPE add_ ## RUST_TYPE(C_TYPE a, C_TYPE b) { \
     return a + b;                                \
