@@ -1,5 +1,5 @@
 #![cfg(feature = "num-traits")]
-#![doc(cfg(feature = "num-traits"))]
+#![cfg_attr(docsrs, doc(cfg(feature = "num-traits")))]
 use crate::{FF32, FF64};
 use core::num::FpCategory;
 

@@ -1,15 +1,4 @@
-#![cfg(any(feature = "nalgebra-v021"))]
-macro_rules! forward_fn_const {
-    ($fast_ty:ident, $base_ty:ident
-     $(fn $fn_name:ident () -> Self ;)*) => {
-        $(
-            fn $fn_name () -> $fast_ty {
-                <$fast_ty>::new(<$base_ty>::$fn_name())
-            }
-        )*
-    }
-}
-
+#[cfg(any(feature = "nalgebra-v021", feature = "nalgebra-v029"))]
 macro_rules! impl_nalgebra {
     ($($fast_ty:ident, $base_ty:ident),* ;
      $nalgebra_version:path, $simba_version:path, $approx_version:path ;
@@ -226,8 +215,8 @@ macro_rules! impl_nalgebra {
                     fn min(self, other: Self) -> Self;
                 }
 
-                forward_fn_const! {
-                    $fast_ty, $base_ty
+                impl_nalgebra! {
+                    @fn_consts $fast_ty, $base_ty
                     fn pi() -> Self ;
                     fn two_pi() -> Self ;
                     fn frac_pi_2() -> Self ;
@@ -366,10 +355,20 @@ macro_rules! impl_nalgebra {
             }
         )*
     };
+
+    (@fn_consts $fast_ty: ident, $base_ty: ident
+        $(fn $fn_name:ident () -> Self ;)*
+    ) => {
+        $(
+            fn $fn_name () -> $fast_ty {
+                <$fast_ty>::new(<$base_ty>::$fn_name())
+            }
+        )*
+    };
 }
 
 #[cfg(feature = "nalgebra-v021")]
-#[doc(cfg(feature = "nalgebra-v021"))]
+#[cfg_attr(docsrs, doc(cfg(feature = "nalgebra-v021")))]
 mod nalgebra_v021 {
     macro_rules! real_field {
         ($fast_ty:ident, $base_ty:ident) => {
@@ -393,7 +392,7 @@ mod nalgebra_v021 {
 }
 
 #[cfg(feature = "nalgebra-v029")]
-#[doc(cfg(feature = "nalgebra-v029"))]
+#[cfg_attr(docsrs, doc(cfg(feature = "nalgebra-v029")))]
 mod nalgebra_v029 {
     macro_rules! real_field {
         ($fast_ty:ident, $base_ty:ident) => {

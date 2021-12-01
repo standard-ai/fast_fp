@@ -1,0 +1,6 @@
+[build]
+rustflags = ["-Clinker-plugin-lto", "-Clinker=clang-13", "-Clink-arg=-fuse-ld=lld-13"]
+rustdocflags = ["--cfg", "docsrs"]
+
+[env]
+CC = "clang-13"

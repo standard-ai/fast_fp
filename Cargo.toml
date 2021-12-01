@@ -65,10 +65,9 @@ cc = "1"
 criterion = { version = "0.3", features = ["html_reports"] }
 rand = "0.8"
 
-[profile.test]
-# run tests at high optimization to exercise typical codegen
-opt-level = 3
-
 [profile.release]
 lto="thin"
 codegen-units=1
+
+[package.metadata.docs.rs]
+all-features = true

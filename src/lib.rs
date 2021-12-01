@@ -1,5 +1,5 @@
 #![doc = include_str!("../README.md")]
-#![feature(doc_cfg)]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 
 use core::{
     cmp, fmt,
