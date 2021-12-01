@@ -346,8 +346,8 @@ macro_rules! impl_nalgebra {
                 #[inline]
                 fn try_sqrt(self) -> Option<Self> {
                     let x = self.freeze_raw();
-                    if x > 0.0 {
-                        Some(<$fast_ty>::new(x.sqrt()))
+                    if x >= 0.0 {
+                        Some(<$fast_ty>::new(x).sqrt())
                     } else {
                         None
                     }
