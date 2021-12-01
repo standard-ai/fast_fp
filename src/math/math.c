@@ -23,6 +23,11 @@
   }                                              \
                                                  \
   __attribute__((always_inline))                 \
+  C_TYPE neg_ ## RUST_TYPE(C_TYPE a) {           \
+    return -a;                                   \
+  }                                              \
+                                                 \
+  __attribute__((always_inline))                 \
   bool eq_ ## RUST_TYPE(C_TYPE a, C_TYPE b) {    \
     return a == b;                               \
   }                                              \
@@ -62,9 +67,11 @@
 IMPL_OPERATIONS(float, f32)
 IMPL_OPERATIONS(double, f64)
 
+// FIXME sqrt is not poison safe on some targets
 IMPL_UNARY_FUNCTION(float, f32, sqrt, sqrtf)
 IMPL_UNARY_FUNCTION(double, f64, sqrt, sqrt)
 
+// FIXME mod is not poison safe, though LLVM frem is
 IMPL_BINARY_FUNCTION(float, f32, rem, fmodf)
 IMPL_BINARY_FUNCTION(double, f64, rem, fmod)
 

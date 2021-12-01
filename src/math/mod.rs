@@ -1,5 +1,5 @@
 use crate::{poison::MaybePoison, FF32, FF64};
-use core::ops::{Add, Div, Mul, Rem, Sub};
+use core::ops::{Add, Div, Mul, Neg, Rem, Sub};
 use paste::paste;
 
 impl FF32 {
@@ -152,6 +152,8 @@ macro_rules! impl_extern_math {
                 fn [<div_ $base_ty>](a: $fast_ty, b: $fast_ty) -> $fast_ty;
                 fn [<rem_ $base_ty>](a: $fast_ty, b: $fast_ty) -> $fast_ty;
 
+                fn [<neg_ $base_ty>](a: $fast_ty) -> $fast_ty;
+
                 fn [<min_ $base_ty>](a: $fast_ty, b: $fast_ty) -> $fast_ty;
                 fn [<max_ $base_ty>](a: $fast_ty, b: $fast_ty) -> $fast_ty;
 
@@ -165,6 +167,24 @@ macro_rules! impl_extern_math {
                 Mul, mul, [<mul_ $base_ty>],
                 Div, div, [<div_ $base_ty>],
                 Rem, rem, [<rem_ $base_ty>],
+            }
+
+            impl Neg for $fast_ty {
+                type Output = Self;
+
+                #[inline(always)]
+                fn neg(self) -> Self::Output {
+                    unsafe { [<neg_ $base_ty>](self) }
+                }
+            }
+
+            impl Neg for &$fast_ty {
+                type Output = <$fast_ty as Neg>::Output;
+
+                #[inline]
+                fn neg(self) -> Self::Output {
+                    -(*self)
+                }
             }
 
             impl $fast_ty {

@@ -5,7 +5,7 @@ use core::{
     cmp, fmt,
     iter::{Product, Sum},
     num::FpCategory,
-    ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Rem, RemAssign, Sub, SubAssign},
+    ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Rem, RemAssign, Sub, SubAssign},
 };
 
 macro_rules! forward_freeze_self {
@@ -377,30 +377,6 @@ macro_rules! impls {
             Product, product, mul, Self::ONE,
         }
 
-        impl Neg for $fast_ty {
-            type Output = Self;
-
-            #[inline(always)]
-            fn neg(self) -> Self::Output {
-                // Safety:
-                //
-                // - encountering poison is safe because LLVM's negate instruction documents
-                // not producing UB on any inputs. The value is also immediately wrapped, so
-                // poison propagation is controlled
-                let val = unsafe { self.0.maybe_poison() };
-                $fast_ty::new(-val)
-            }
-        }
-
-        impl Neg for &$fast_ty {
-            type Output = <$fast_ty as Neg>::Output;
-
-            #[inline]
-            fn neg(self) -> Self::Output {
-                -(*self)
-            }
-        }
-
         // Branching on poison values is UB, so any operation that makes a bool is protected by
         // freezing the operands. This includes [Partial]Eq and [Partial]Ord. Unfortunately
         // freezing has a nontrivial impact on performance, so non-bool methods should be preferred
@@ -526,5 +502,3 @@ macro_rules! impls {
 
 impls! { FF32, f32 }
 impls! { FF64, f64 }
-
-// TODO num_traits, libm?
