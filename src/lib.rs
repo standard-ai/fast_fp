@@ -64,29 +64,19 @@ impl std::error::Error for InvalidValueError {}
 // values have a relatively consistent behavior (stuff like transitivity), defined cases for UB,
 // and importantly can be limited in scope by freezing to a fixed value.
 //
-// This library handles poison by limiting its reach to only the pure arithmetic operations on the
-// wrapper float types. Any arbitrary FF32 is considered possibly invalid (containing +-inf or NaN)
-// because it's not feasible to track validity (without running all operations in parallel with
-// unfast-math and thus negating any possible improvement). Float add/sub/mul/div/rem are permitted
-// on the possibly poison values (as documented by LLVM), producing transitively poison results,
-// then wrapped in FF32. Any other operations require the value to be not-poison in order to be
-// not-UB: anything like comparison/printing/conversion/casting/etc is done on frozen copies of
-// the data. Originating values that were valid will pass through the arithmetic and freezing
-// exactly as they are; invalid values will become poison through the arithmetic and then be frozen
-// to some unspecified value. The user may encounter garbage in such a case, but not in a way that
-// triggers UB.
+// FIXME more docs
 //
 // Prior art and references
 //
 // https://github.com/rust-lang/rust/issues/21690
 // Task for general purpose fast-math in rust lang. Discussions about the right approach
 // and generalizability, including whether it should be type-based or annotation based. fast_fp
-// uses types wrapping intrinsics because it's the only option available in user space, and gets
-// good optimizations useful in practice
+// uses types because it's the only option available in user space, and gets good optimizations
+// useful in practice
 //
 // https://docs.rs/fast-floats/0.2.0/fast_floats/index.html
-// Another crate that wraps fast intrinsics in types. They didn't address poison propagation,
-// leaving constructors unsafe
+// A crate that wraps fast intrinsics in types. Intrinsics only apply to basic ops, and they didn't
+// address poison propagation, leaving constructors unsafe
 //
 // https://llvm.org/docs/LangRef.html#fast-math-flags
 // LLVM's documentation on fast-math
@@ -227,8 +217,17 @@ macro_rules! impls {
             const ONE: $fast_ty = <$fast_ty>::new(1.0);
             const ZERO: $fast_ty = <$fast_ty>::new(0.0);
 
+            /// The smallest finite value
+            pub const MIN: $fast_ty = <$fast_ty>::new($base_ty::MIN);
+
+            /// The smallest positive value
+            pub const MIN_POSITIVE: $fast_ty = <$fast_ty>::new($base_ty::MIN_POSITIVE);
+
+            /// The largest finite value
+            pub const MAX: $fast_ty = <$fast_ty>::new($base_ty::MAX);
+
             #[doc = "Create a new `"]
-            #[doc= stringify!($fast_ty)]
+            #[doc = stringify!($fast_ty)]
             #[doc = "` instance from the given float value."]
             ///
             /// The given value **MUST NOT** be infinite or NaN, and any operations involving this value must
@@ -239,7 +238,7 @@ macro_rules! impls {
             }
 
             #[doc = "Create a new `"]
-            #[doc= stringify!($fast_ty)]
+            #[doc = stringify!($fast_ty)]
             #[doc = "` instance from the given float value, returning an error if the value is infinite or NaN."]
             ///
             /// Note that this check is **not sufficient** to avoid all unspecified outputs, because an
@@ -261,57 +260,12 @@ macro_rules! impls {
                 self.0.freeze()
             }
 
-            // TODO migrate these to native implementations to freeze less and fast-math more
             forward_freeze_self! {
                 $fast_ty, $base_ty
-                pub fn acos(self) -> Self;
-                pub fn acosh(self) -> Self;
-                pub fn asin(self) -> Self;
-                pub fn asinh(self) -> Self;
-                pub fn atan(self) -> Self;
-                pub fn atan2(self, other: Self) -> Self;
-                pub fn atanh(self) -> Self;
-                pub fn cbrt(self) -> Self;
-                pub fn ceil(self) -> Self;
-                pub fn clamp(self, min: Self, max: Self) -> Self;
-                pub fn cos(self) -> Self;
-                pub fn cosh(self) -> Self;
                 pub fn div_euclid(self, rhs: Self) -> Self;
-                pub fn exp(self) -> Self;
-                pub fn exp2(self) -> Self;
-                pub fn exp_m1(self) -> Self;
-                pub fn floor(self) -> Self;
-                pub fn fract(self) -> Self;
-                pub fn ln(self) -> Self;
-                pub fn ln_1p(self) -> Self;
-                pub fn log(self, base: Self) -> Self;
-                pub fn log10(self) -> Self;
-                pub fn log2(self) -> Self;
-                //pub fn max(self, other: Self) -> Self;
-                //pub fn min(self, other: Self) -> Self;
-                pub fn mul_add(self, a: Self, b: Self) -> Self;
-                pub fn powf(self, n: Self) -> Self;
                 pub fn rem_euclid(self, rhs: Self) -> Self;
-                pub fn round(self) -> Self;
-                pub fn sin(self) -> Self;
-                pub fn sinh(self) -> Self;
-                //pub fn sqrt(self) -> Self;
-                pub fn tan(self) -> Self;
-                pub fn tanh(self) -> Self;
                 pub fn to_degrees(self) -> Self;
                 pub fn to_radians(self) -> Self;
-                pub fn trunc(self) -> Self;
-            }
-
-            #[inline]
-            pub fn powi(self, n: i32) -> Self {
-                <$fast_ty>::new(self.freeze_raw().powi(n))
-            }
-
-            #[inline]
-            pub fn sin_cos(self) -> (Self, Self) {
-                let (sin, cos) = self.freeze_raw().sin_cos();
-                (<$fast_ty>::new(sin), <$fast_ty>::new(cos))
             }
 
             #[inline]
@@ -347,14 +301,40 @@ macro_rules! impls {
                 self.classify() == FpCategory::Subnormal
             }
 
-            /// The smallest finite value
-            pub const MIN: $fast_ty = <$fast_ty>::new($base_ty::MIN);
+            #[inline]
+            pub fn hypot(self, other: Self) -> Self {
+                (self * self + other * other).sqrt()
+            }
 
-            /// The smallest positive value
-            pub const MIN_POSITIVE: $fast_ty = <$fast_ty>::new($base_ty::MIN_POSITIVE);
+            #[inline]
+            pub fn signum(self) -> Self {
+                Self::ONE.copysign(self)
+            }
 
-            /// The largest finite value
-            pub const MAX: $fast_ty = <$fast_ty>::new($base_ty::MAX);
+            #[inline]
+            pub fn recip(self) -> Self {
+                Self::ONE / self
+            }
+
+            #[inline]
+            pub fn fract(self) -> Self {
+                self - self.trunc()
+            }
+
+            #[inline]
+            pub fn log(self, base: Self) -> Self {
+                self.ln() / base.ln()
+            }
+
+            #[inline]
+            pub fn mul_add(self, mul: Self, add: Self) -> Self {
+                self * mul + add
+            }
+
+            #[inline]
+            pub fn sin_cos(self) -> (Self, Self) {
+                (self.sin(), self.cos())
+            }
         }
 
         impl_fmt! {
@@ -417,16 +397,11 @@ macro_rules! impls {
             }
         }
 
-        impl Eq for $fast_ty {}
-
         impl PartialOrd<$fast_ty> for $fast_ty {
             #[inline(always)]
             fn partial_cmp(&self, other: &$fast_ty) -> Option<cmp::Ordering> {
-                Some(self.cmp(other))
+                <$base_ty>::partial_cmp(&self.freeze_raw(), &other.freeze_raw())
             }
-
-            // TODO specialize a MaybePoison<bool> with `x & 0b1`?
-            // then comparisons can freeze only once on output instead of twice on input
 
             #[inline(always)]
             fn lt(&self, other: &$fast_ty) -> bool {
@@ -448,6 +423,9 @@ macro_rules! impls {
                 self.freeze_raw() >= other.freeze_raw()
             }
         }
+
+        // FIXME feature conditional Eq/Ord
+        impl Eq for $fast_ty {}
 
         impl Ord for $fast_ty {
             #[inline(always)]

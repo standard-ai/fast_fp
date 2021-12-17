@@ -18,28 +18,19 @@ name = "math"
 harness = false
 
 [features]
-default = [
-  "num-traits",
-  "finite-math-only",
-  "associative-math",
-  "reciprocal-math",
-  "no-signed-zeros",
-  "no-trapping-math",
-  "fp-contract-fast",
-  "approx-func",
-]
+default = ["num-traits"]
 
-# default fast-math features
-finite-math-only = []
-associative-math = []
-reciprocal-math = []
-no-signed-zeros = []
-no-trapping-math = []
-fp-contract-fast = []
-approx-func = []
+# disable-able fast-math features
+no-finite-math-only = []
+no-associative-math = []
+no-reciprocal-math = []
+signed-zeros = []
+trapping-math = []
+fp-contract-on = []
+no-approx-func = []
+math-errno = []
 
-# non-default fast-math-like features
-denormal-fp-math-preserve-sign = []
+# TODO denormal-fp-math? can have cpu-wide consequences
 
 # optional trait implementations
 nalgebra-v021 = ["num-traits", "nalgebra_v021", "simba_v01", "approx_v03"]

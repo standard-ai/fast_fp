@@ -6,6 +6,7 @@ fn main() {
         builder.compiler("clang");
     }
 
+    builder.warnings_into_errors(true);
     builder.flag("-flto=thin");
 
     build_ll(builder.clone());
@@ -21,32 +22,49 @@ fn build_ll(mut builder: cc::Build) {
 }
 
 fn build_c(mut builder: cc::Build) {
-    builder.flag("-O3");
+    builder.opt_level(3);
 
-    #[cfg(feature = "finite-math-only")]
-    builder.flag("-ffinite-math-only");
-
-    #[cfg(feature = "associative-math")]
+    #[cfg(not(feature = "no-associative-math"))]
     builder.flag("-fassociative-math");
 
-    #[cfg(feature = "reciprocal-math")]
+    #[cfg(not(feature = "no-reciprocal-math"))]
     builder.flag("-freciprocal-math");
 
-    #[cfg(feature = "no-signed-zeros")]
+    #[cfg(not(feature = "signed-zeros"))]
     builder.flag("-fno-signed-zeros");
 
-    #[cfg(feature = "no-trapping-math")]
+    #[cfg(not(feature = "trapping-math"))]
     builder.flag("-fno-trapping-math");
 
-    #[cfg(feature = "fp-contract-fast")]
+    #[cfg(not(feature = "fp-contract-on"))]
     builder.flag("-ffp-contract=fast");
 
-    // TODO figure out if this works
-    //#[cfg(feature = "approx-func")]
-    //builder.flag("-Xclang -fapprox-func");
+    // -fapprox-func isn't currently available in the driver, but it is in clang itself
+    // https://reviews.llvm.org/D106191
+    #[cfg(not(feature = "no-approx-func"))]
+    builder.flag("-Xclang").flag("-fapprox-func");
 
-    #[cfg(feature = "denormal-fp-math-preserve-sign")]
-    builder.flag("-fdenormal-fp-math=preserve-sign");
+    #[cfg(not(feature = "math-errno"))]
+    builder.flag("-fno-math-errno");
 
-    builder.file("src/math/math.c").compile("math")
+    // poison_unsafe must be compiled without finite-math-only
+    // see its docs for details
+    poison_unsafe(builder.clone());
+
+    #[cfg(not(feature = "no-finite-math-only"))]
+    builder.flag("-ffinite-math-only");
+
+    poison_safe(builder);
+}
+
+fn poison_unsafe(mut builder: cc::Build) {
+    builder
+        .file("src/math/poison_unsafe.c")
+        .compile("poison_unsafe")
+}
+
+fn poison_safe(mut builder: cc::Build) {
+    builder
+        .file("src/math/poison_safe.c")
+        .compile("poison_safe")
 }
