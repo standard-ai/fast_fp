@@ -24,34 +24,21 @@ fn build_ll(mut builder: cc::Build) {
 fn build_c(mut builder: cc::Build) {
     builder.opt_level(3);
 
-    #[cfg(not(feature = "no-associative-math"))]
+    // TODO control flags with generics
     builder.flag("-fassociative-math");
-
-    #[cfg(not(feature = "no-reciprocal-math"))]
     builder.flag("-freciprocal-math");
-
-    #[cfg(not(feature = "signed-zeros"))]
     builder.flag("-fno-signed-zeros");
-
-    #[cfg(not(feature = "trapping-math"))]
     builder.flag("-fno-trapping-math");
-
-    #[cfg(not(feature = "fp-contract-on"))]
     builder.flag("-ffp-contract=fast");
-
     // -fapprox-func isn't currently available in the driver, but it is in clang itself
     // https://reviews.llvm.org/D106191
-    #[cfg(not(feature = "no-approx-func"))]
     builder.flag("-Xclang").flag("-fapprox-func");
-
-    #[cfg(not(feature = "math-errno"))]
     builder.flag("-fno-math-errno");
 
     // poison_unsafe must be compiled without finite-math-only
     // see its docs for details
     poison_unsafe(builder.clone());
 
-    #[cfg(not(feature = "no-finite-math-only"))]
     builder.flag("-ffinite-math-only");
 
     poison_safe(builder);

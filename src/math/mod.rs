@@ -80,14 +80,16 @@ macro_rules! poison_safe_fns {
                     // primitive type, we can pass them directly over FFI
                     fn [<$fn _ $base_ty>](a: $fast_ty $(, $arg: $fast_ty)*) -> $fast_ty;
                 }
+            )*
 
-                impl $fast_ty {
+            impl $fast_ty {
+                $(
                     #[inline]
                     pub fn $fn(self $(, $arg: Self)*) -> Self {
                         unsafe { [<$fn _ $base_ty>](self $(, $arg)*) }
                     }
-                }
-            )*
+                )*
+            }
         }
     }
 }
@@ -104,13 +106,16 @@ macro_rules! poison_unsafe_fns {
                     fn [<$fn _ $base_ty>](a: $base_ty $(, $arg: $base_ty)*) -> $fast_ty;
                 }
 
-                impl $fast_ty {
+            )*
+
+            impl $fast_ty {
+                $(
                     #[inline]
                     pub fn $fn(self $(, $arg: Self)*) -> Self {
                         unsafe { [<$fn _ $base_ty>](self.freeze_raw() $(, $arg.freeze_raw())*) }
                     }
-                }
-            )*
+                )*
+            }
         }
     }
 }

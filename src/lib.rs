@@ -45,26 +45,37 @@ mod num_traits;
 mod poison;
 use poison::MaybePoison;
 
-/// The error returned by the checked constructors of [`FF32`] and [`FF64`]
-#[derive(Clone, Debug, PartialEq)]
-pub struct InvalidValueError {
-    _priv: (),
-}
-
-impl fmt::Display for InvalidValueError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str("value may not be infinite or NaN")
-    }
-}
-
-impl std::error::Error for InvalidValueError {}
-
 // The big challenge with fast-math in general is avoiding UB, and to a lesser extent unspecified
 // values. LLVM's fast operations document "poison" behavior when given invalid inputs; poison
 // values have a relatively consistent behavior (stuff like transitivity), defined cases for UB,
 // and importantly can be limited in scope by freezing to a fixed value.
 //
-// FIXME more docs
+// This library manages these poison values to prevent UB. On the rust side, potentially-poison
+// values are stored in a `MaybePoison` type, similar to the std's `MaybeUninit`. This helps ensure
+// that the values would not trigger UB based on rust's semantics (for example, avoiding questions
+// of whether all bit patterns of a primitive are valid). On the C side, operations are split into
+// two groups: poison "safe" and poison "unsafe". Poison safe operations are ones which can accept
+// any input value without triggering any UB. The operation may produce a poison value, for example
+// `1.f / 0.f` with finite-math-only enabled, but not UB. Poison unsafe operations are ones which
+// could trigger UB for some input value(s). These two definitions follow LLVM's documentation on
+// poison, which explains poison can be relaxed to any value for a type, including `undef`.
+// Therefore, if poison is passed to an operation it could be relaxed to any value; if some value
+// could trigger UB, then so can poison.
+//
+// Poison safe operations are called with input values normally. They don't produce UB, so it's
+// safe to call no matter the input. The operation is assumed to potentially produce poison itself,
+// so the output is always wrapped in a `MaybePoison`.
+//
+// Poison unsafe operations must take certain precautions. First, any input arguments that are
+// `MaybePoison` are frozen using LLVM's `freeze` instruction. This produces a value with an
+// unspecified, but fixed, value which now won't be relaxed any further. Additionally, these
+// operations are compiled without any flags that potentially introduce poison, regardless of
+// enabled crate features. This ensures that the operation internally should not produce any poison
+// regardless of input value. These two steps together preclude any poison values, which should
+// prevent UB (assuming the operation was safe to call in the first place).
+//
+// All operations in rust are considered poison unsafe, and therefore must always freeze the value
+// before using it. Freezing produces a regular f32/f64
 //
 // Prior art and references
 //
@@ -86,6 +97,20 @@ impl std::error::Error for InvalidValueError {}
 //
 // https://github.com/rust-lang/unsafe-code-guidelines/issues/71
 // notes on the validity of primitive bit patterns
+
+/// The error returned by the checked constructors of [`FF32`] and [`FF64`]
+#[derive(Clone, Debug, PartialEq)]
+pub struct InvalidValueError {
+    _priv: (),
+}
+
+impl fmt::Display for InvalidValueError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str("value may not be infinite or NaN")
+    }
+}
+
+impl std::error::Error for InvalidValueError {}
 
 /// A wrapper over `f32` which enables some fast-math optimizations.
 // TODO how best to document unspecified values, including witnessing possibly varying values
@@ -421,42 +446,6 @@ macro_rules! impls {
             #[inline(always)]
             fn ge(&self, other: &$fast_ty) -> bool {
                 self.freeze_raw() >= other.freeze_raw()
-            }
-        }
-
-        // FIXME feature conditional Eq/Ord
-        impl Eq for $fast_ty {}
-
-        impl Ord for $fast_ty {
-            #[inline(always)]
-            fn cmp(&self, other: &$fast_ty) -> cmp::Ordering {
-                let this = self.freeze_raw();
-                let that = other.freeze_raw();
-
-                // Note NaNs are not supported (and would break everything else anyway) so we ignore them
-                // and implement full Ord
-                if this < that {
-                    cmp::Ordering::Less
-                } else if this > that {
-                    cmp::Ordering::Greater
-                } else {
-                    cmp::Ordering::Equal
-                }
-            }
-
-            #[inline]
-            fn min(self, other: $fast_ty) -> $fast_ty {
-                <$fast_ty>::min(self, other)
-            }
-
-            #[inline]
-            fn max(self, other: $fast_ty) -> $fast_ty {
-                <$fast_ty>::max(self, other)
-            }
-
-            #[inline]
-            fn clamp(self, min: $fast_ty, max: $fast_ty) -> $fast_ty {
-                <$fast_ty>::clamp(self, min, max)
             }
         }
 

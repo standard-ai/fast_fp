@@ -1,7 +1,7 @@
 #![cfg(feature = "num-traits")]
 #![cfg_attr(docsrs, doc(cfg(feature = "num-traits")))]
+
 use crate::{FF32, FF64};
-use core::num::FpCategory;
 
 macro_rules! forward_freeze_ty {
     ($fast_ty:ident, $base_ty:ident
@@ -189,46 +189,7 @@ macro_rules! impl_num_traits {
             }
         }
 
-        /// Because inf and nan are prohibited, the `fast_fp` types correspond more to the `Real`
-        /// trait than the `Float` trait. However in practice some libs require a Float bound when
-        /// they could really use a Real, which would restrict using the `fast_fp` types.
-        impl num_traits::Float for $fast_ty {
-            /// Panics because NaN values are not supported
-            #[inline]
-            fn nan() -> Self {
-                panic!(concat!(
-                    stringify!($fast_ty),
-                    " does not support NaN values"
-                ));
-            }
-
-            /// Panics because infinite values are not supported
-            ///
-            /// Consider using [`max_value`](num_traits::Float::max_value) as appropriate instead
-            #[inline]
-            fn infinity() -> Self {
-                panic!(concat!(
-                    stringify!($fast_ty),
-                    " does not support infinite values. Consider using `max_value` for comparisons"
-                ));
-            }
-
-            /// Panics because infinite values are not supported
-            ///
-            /// Consider using [`min_value`](num_traits::Float::min_value) as appropriate instead
-            #[inline]
-            fn neg_infinity() -> Self {
-                panic!(concat!(
-                    stringify!($fast_ty),
-                    " does not support infinite values. Consider using `min_value` for comparisons"
-                ));
-            }
-
-            #[inline]
-            fn neg_zero() -> Self {
-                -Self::ZERO
-            }
-
+        impl num_traits::real::Real for $fast_ty {
             #[inline]
             fn min_value() -> Self {
                 $fast_ty::MIN
@@ -249,25 +210,8 @@ macro_rules! impl_num_traits {
                 <$fast_ty>::new($base_ty::EPSILON)
             }
 
-            #[inline]
-            fn is_nan(self) -> bool {
-                false
-            }
-
-            #[inline]
-            fn is_infinite(self) -> bool {
-                false
-            }
-
-            #[inline]
-            fn is_finite(self) -> bool {
-                true
-            }
-
             forward_self! {
                 $fast_ty, $base_ty
-                fn is_normal(self) -> bool;
-                fn classify(self) -> FpCategory;
                 fn floor(self) -> Self;
                 fn ceil(self) -> Self;
                 fn round(self) -> Self;
@@ -316,11 +260,6 @@ macro_rules! impl_num_traits {
                 $fast_ty, $base_ty
                 #[allow(deprecated)]
                 fn abs_sub(self, other: Self) -> Self;
-            }
-
-            #[inline]
-            fn integer_decode(self) -> (u64, i16, i8) {
-                <$base_ty as num_traits::Float>::integer_decode(self.freeze_raw())
             }
         }
     };

@@ -3,12 +3,12 @@ use criterion::{
     BenchmarkId, Criterion, Throughput,
 };
 use fast_fp::{ff32, ff64, FF32, FF64};
+use ops::{Add, Div, Mul};
 use rand::{
     distributions::{self, Distribution},
     rngs::StdRng,
     Rng, SeedableRng,
 };
-use std::ops::{Add, Div, Mul};
 
 fn add(c: &mut Criterion) {
     let mut group = c.benchmark_group("add");
@@ -18,9 +18,9 @@ fn add(c: &mut Criterion) {
     let f64s = distributions::Uniform::<f64>::new(0.0, 1.0);
 
     // clone the rng for each benched type to keep the generated values identical
-    fold(&mut group, "std::f32", f32::add, 0.0, rng.clone(), f32s);
+    fold(&mut group, "f32", f32::add, 0.0, rng.clone(), f32s);
     fold(&mut group, "FF32", FF32::add, ff32(0.0), rng.clone(), f32s);
-    fold(&mut group, "std::f64", f64::add, 0.0, rng.clone(), f64s);
+    fold(&mut group, "f64", f64::add, 0.0, rng.clone(), f64s);
     fold(&mut group, "FF64", FF64::add, ff64(0.0), rng.clone(), f64s);
 }
 
@@ -34,9 +34,9 @@ fn mul(c: &mut Criterion) {
     let f64s = distributions::Uniform::<f64>::new(0.9, 1.1);
 
     // clone the rng for each benched type to keep the generated values identical
-    fold(&mut group, "std::f32", f32::mul, 0.0, rng.clone(), f32s);
+    fold(&mut group, "f32", f32::mul, 0.0, rng.clone(), f32s);
     fold(&mut group, "FF32", FF32::mul, ff32(0.0), rng.clone(), f32s);
-    fold(&mut group, "std::f64", f64::mul, 0.0, rng.clone(), f64s);
+    fold(&mut group, "f64", f64::mul, 0.0, rng.clone(), f64s);
     fold(&mut group, "FF64", FF64::mul, ff64(0.0), rng.clone(), f64s);
 }
 
@@ -50,9 +50,9 @@ fn div(c: &mut Criterion) {
     let f64s = distributions::Uniform::<f64>::new(0.9, 1.1);
 
     // clone the rng for each benched type to keep the generated values identical
-    fold(&mut group, "std::f32", f32::div, 0.0, rng.clone(), f32s);
+    fold(&mut group, "f32", f32::div, 0.0, rng.clone(), f32s);
     fold(&mut group, "FF32", FF32::div, ff32(0.0), rng.clone(), f32s);
-    fold(&mut group, "std::f64", f64::div, 0.0, rng.clone(), f64s);
+    fold(&mut group, "f64", f64::div, 0.0, rng.clone(), f64s);
     fold(&mut group, "FF64", FF64::div, ff64(0.0), rng.clone(), f64s);
 }
 
@@ -64,9 +64,9 @@ fn min(c: &mut Criterion) {
     let f64s = distributions::Uniform::<f64>::new(0.0, 1.0);
 
     // clone the rng for each benched type to keep the generated values identical
-    fold(&mut group, "std::f32", f32::min, 0.0, rng.clone(), f32s);
+    fold(&mut group, "f32", f32::min, 0.0, rng.clone(), f32s);
     fold(&mut group, "FF32", FF32::min, ff32(0.0), rng.clone(), f32s);
-    fold(&mut group, "std::f64", f64::min, 0.0, rng.clone(), f64s);
+    fold(&mut group, "f64", f64::min, 0.0, rng.clone(), f64s);
     fold(&mut group, "FF64", FF64::min, ff64(0.0), rng.clone(), f64s);
 }
 
