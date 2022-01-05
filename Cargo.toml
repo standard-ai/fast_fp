@@ -50,4 +50,5 @@ lto="thin"
 codegen-units=1
 
 [package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
 all-features = true
