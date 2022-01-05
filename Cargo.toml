@@ -3,8 +3,13 @@ name = "fast_fp"
 version = "0.1.0"
 authors = ["Renar Narubin <renar@standard.ai>"]
 edition = "2021"
+description = "Floating point fast-math optimizations"
+repository = "https://github.com/standard-ai/fast_fp"
 readme = "README.md"
 license = "MIT OR Apache-2.0"
+keywords = ["fast-math", "performance"]
+categories = ["mathematics"]
+documentation = "https://docs.rs/fast_fp"
 
 [lib]
 bench = false
