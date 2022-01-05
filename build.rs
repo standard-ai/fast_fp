@@ -30,9 +30,24 @@ fn build_c(mut builder: cc::Build) {
     builder.flag("-fno-signed-zeros");
     builder.flag("-fno-trapping-math");
     builder.flag("-ffp-contract=fast");
-    // -fapprox-func isn't currently available in the driver, but it is in clang itself
-    // https://reviews.llvm.org/D106191
-    builder.flag("-Xclang").flag("-fapprox-func");
+
+    // -fapprox-func isn't currently available in the clang driver (fixed with
+    // https://reviews.llvm.org/D106191 but need an updated version), but it is in clang itself.
+    // This means it can be toggled using the `-Xclang <arg>` option.
+    //
+    // The clang version on docs.rs doesn't recognize -fapprox-func even with -Xclang :shrug:
+    // We could attempt to check flag support using cc's flag_if_supported, but this is a compound
+    // flag which doesn't seem to mix well with the is_supported api checks. Instead, do the dumb
+    // thing and don't enable this flag when compiling on docs.rs. That way, normal users should at
+    // least get a slightly informative error if they have an incompatible clang
+    match std::env::var("DOCS_RS") {
+        Err(std::env::VarError::NotPresent) => {
+            builder.flag("-Xclang").flag("-fapprox-func");
+        }
+        Ok(_) => {}
+        Err(err) => panic!("{}", err),
+    }
+
     builder.flag("-fno-math-errno");
 
     // poison_unsafe must be compiled without finite-math-only
