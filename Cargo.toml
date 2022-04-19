@@ -18,6 +18,11 @@ bench = false
 name = "operations"
 harness = false
 
+[[bench]]
+name = "geometry"
+harness = false
+required-features = ["nalgebra-v029"]
+
 [features]
 default = ["num-traits"]
 

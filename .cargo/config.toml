@@ -1,5 +1,5 @@
 [build]
-rustflags = ["-Clinker-plugin-lto", "-Clinker=clang-13", "-Clink-arg=-fuse-ld=lld-13"]
+rustflags = ["-Clinker-plugin-lto", "-Clinker=clang-13", "-Clink-arg=-fuse-ld=lld-13", "-Ctarget-cpu=native"]
 rustdocflags = ["--cfg", "docsrs"]
 
 [env]

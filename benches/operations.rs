@@ -3,12 +3,12 @@ use criterion::{
     BenchmarkId, Criterion, Throughput,
 };
 use fast_fp::{ff32, ff64, FF32, FF64};
-use ops::{Add, Div, Mul};
 use rand::{
     distributions::{self, Distribution},
     rngs::StdRng,
     Rng, SeedableRng,
 };
+use std::ops::{Add, Div, Mul};
 
 fn add(c: &mut Criterion) {
     let mut group = c.benchmark_group("add");
