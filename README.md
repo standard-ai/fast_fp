@@ -5,14 +5,51 @@ optimizations for many operations. These optimizations allow the compiler to
 potentially generate faster code by relaxing some of the requirements of [IEEE
 754] floating-point arithmetic.
 
-This may result in different outputs than operations on the standard float
-primitives like `f32`, particularly where fine-grained precision is important.
-`fast-math` may allow reordering operations in such a way that some precision
-is lost in the overall computation. Note that there are also cases where
-fast-math optimizations can _improve_ precision, such as contracting separate
-multiplication and addition into a fused multiply-add operation.
+## Examples
 
-## Caveats
+```rust
+use fast_fp::{FF32, ff32};
+
+// Construct instances of the fast type from std's type using the convenience
+// wrapper `ff32` (or `ff64`)
+let four = ff32(4.0);
+
+// or using the `From`/`Into` trait
+let five: FF32 = 5.0.into();
+
+assert_eq!(four + five, ff32(9.0));
+
+// Most ops are also implemented to work with std's floats too (including PartialEq).
+// This makes working with literals easier.
+assert_eq!(five + 6.0, 11.0);
+assert_eq!(five * 2.0, 10.0);
+
+// Functions can be made generic to accept std or fast types using `num-traits`
+use num_traits::real::Real;
+fn square<T: Real>(num: T) -> T {
+    num * num
+}
+assert_eq!(square(3.0_f32), 9.0);
+assert_eq!(square(five), 25.0);
+
+// If the nalgebra feature (with version suffix) is enabled, interop with
+// nalgebra is supported
+# #[cfg(feature = "nalgebra_v029")]
+use nalgebra_v029 as na;
+# #[cfg(feature = "nalgebra_v029")]
+assert_eq!(na::Matrix3::repeat(four).sum(), 36.0);
+```
+
+# Caveats
+
+### Precision
+The fast-math optimizations may result in different outputs than operations
+on the standard float primitives like `f32`, particularly where fine-grained
+precision is important. Fast-math may allow reordering operations in such a
+way that some precision is lost in the overall computation. Note that there are
+also cases where fast-math optimizations can _improve_ precision, such as
+contracting separate multiplication and addition into a fused multiply-add
+operation.
 
 ### Performance
 Use of this crate's primitives may not be faster than the standard primitives
@@ -23,8 +60,8 @@ benchmark their code to understand whether they actually benefit from use of
 these types.
 
 ### Finite Math
-By default, the `finite-math-only` optimization flag is enabled. With this
-enabled, the user must ensure that operations on the fast types **do not**
+Many operations have the `finite-math-only` optimization flag enabled. With
+this flag, the user must ensure that operations on the fast types **do not**
 involve infinite or NaN values. If the arguments to an operation are, or the
 results of an operation _would_ be, `+inf`, `-inf`, or `NaN`, then the
 operation's result value is unspecified. This crate goes to lengths to ensure
