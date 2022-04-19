@@ -1,6 +1,6 @@
 [package]
 name = "fast_fp"
-version = "0.1.2"
+version = "0.1.3"
 authors = ["Renar Narubin <renar@standard.ai>"]
 edition = "2018"
 description = "Floating point fast-math optimizations"
